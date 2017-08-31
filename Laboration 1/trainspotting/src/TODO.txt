@@ -1,0 +1,4 @@
+Att göra list:
+
+- Lägga till sensorer på banan och i koden
+- Lägga till en metod så den utför "switch" automatiskt

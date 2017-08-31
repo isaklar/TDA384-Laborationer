@@ -1,16 +1,14 @@
 import TSim.*;
 
 public class Lab1 {
+  private TSimInterface tsi;
 
   public Lab1(Integer speed1, Integer speed2) {
-    TSimInterface tsi = TSimInterface.getInstance();
+    tsi = TSimInterface.getInstance();
 
-    try {
-      tsi.setSpeed(1,speed1);
-    }
-    catch (CommandException e) {
-      e.printStackTrace();    // or only e.getMessage() for the error
-      System.exit(1);
-    }
+      Train t1 = new Train(1, speed1);
+      Train t2 = new Train(2, speed2);
+      t1.start();
+      t2.start();
   }
 }
