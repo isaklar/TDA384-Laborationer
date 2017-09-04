@@ -45,13 +45,6 @@ public class Train extends Thread{
 			new SensorEvent(trainId,4,13,INACTIVE)
 	};
 
-  private final Dimension[] switches = new Dimension[]{
-			new Dimension(17, 7),
-			new Dimension(15, 9),
-			new Dimension(4, 9),
-			new Dimension(3, 11)
-	};
-
   public Train(int trainId, int speed){
     this.trainId = trainId;
     this.speed = speed;
@@ -125,7 +118,7 @@ public class Train extends Thread{
 				enteringStation = false;
 				tsi.setSpeed(trainId, 0);
 				sleep(2000 + 2 * Math.abs(speed));
-				speed = -speed;
+				speed *= -1;
 				tsi.setSpeed(trainId, speed);
 			}
 		}
@@ -177,9 +170,9 @@ public class Train extends Thread{
 						tsi.setSwitch(15, 9, switchLeft);
 					}
 					if (statSems[0].tryAcquire()) {
-						tsi.setSwitch(17, 7, switchLeft);
-					} else {
 						tsi.setSwitch(17, 7, switchRight);
+					} else {
+						tsi.setSwitch(17, 7, switchLeft);
 					}
 					enteringStation = true;
 				}
@@ -194,9 +187,9 @@ public class Train extends Thread{
 						tsi.setSwitch(4, 9, switchRight);
 					}
 					if (statSems[1].tryAcquire()) {
-						tsi.setSwitch(3, 11, switchRight);
-					} else {
 						tsi.setSwitch(3, 11, switchLeft);
+					} else {
+						tsi.setSwitch(3, 11, switchRight);
 					}
 					enteringStation = true;
 				}
