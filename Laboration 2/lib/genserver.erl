@@ -2,7 +2,7 @@
 -export([start/3, stop/1, request/2, request/3, update/2]).
 
 % Spawn a process and register it with a given atom
-% Function F should have arity 1
+% Function F should have arity 2
 start(Atom, State, F) ->
   Pid = spawn(fun() -> loop(State, F) end),
   catch(unregister(Atom)),
