@@ -51,6 +51,7 @@ request(Pid, Data, Timeout) ->
     exit("Timeout")
   end.
 
+
 % Update loop function
 update(Pid, Fun) ->
   Ref = make_ref(),

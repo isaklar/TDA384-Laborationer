@@ -3,45 +3,43 @@
 
 
 -record(server_st, {
-server,
 channels
 }).
 
-%main(State) ->
-    %receive
-      %  {request, From, Ref, Request} ->
-      %      {Response, NextState} = handle(State, Request),
-      %      From ! {result, Ref, Response},
-      %      main(NextState)
-  %  end.
 
-
-initial_state(ServerAtom) ->
+initial_state() ->
   #server_st{
-  server = ServerAtom,
   channels=[]
   }.
 
-
 % Connect user to channel
-handle(St, {join, Channel, Pid}) ->
+handle(St, {join, Channel, Nick, Pid}) ->
   ChannelExist = lists:member(Channel, St#server_st.channels),
   if
     ChannelExist == false ->
       NewChannel = St#server_st.channels ++ [Channel],
       NewState = St#server_st{channels=NewChannel},
-      genserver:start(list_to_atom(Channel), channel:initial_state(Channel), fun channel:handle/2),
-      genserver:request(list_to_atom(Channel), {connect, Pid}),
+      genserver:start(list_to_atom(Channel), channel:initial_state(Channel, Nick, Pid), fun channel:handle/2),
       {reply, ok, NewState};
     true ->
-      genserver:request(list_to_atom(Channel), {connect, Pid}),
-      {reply, ok, St}
+      genserver:request(list_to_atom(Channel), {connect, Nick, Pid}),
+      {reply,ok, St}
+    end;
+
+% disconnect user to channel
+handle(St, {leave, Channel, Nick, Pid}) ->
+  ChannelExist = lists:member(Channel, St#server_st.channels),
+  if
+    ChannelExist == true ->
+      NewState  = St#server_st{channels = lists:delete(Channel, St#server_st.channels)},
+      genserver:start(list_to_atom(Channel), channel:initial_state(Channel, Nick, Pid), fun channel:handle/2),
+      {reply, ok, NewState}
     end.
 
 % Start a new server process with the given name
 % Do not change the signature of this function.
 start(ServerAtom) ->
-  genserver:start(ServerAtom, initial_state(ServerAtom), fun handle/2). %returns "Pid"
+  genserver:start(ServerAtom, initial_state(), fun handle/2). %returns "Pid"
 
 % Stop the server process registered to the given name,
 % together with any other associated processes
