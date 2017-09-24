@@ -29,47 +29,47 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 %   - NewState is the updated state of the client
 
 % Join channel
-handle(St = #client_st{nick = Nick}, {join, Channel}) ->
+handle(St, {join, Channel}) ->
   ChannelExist = lists:member(Channel, St#client_st.channels),
   if
     ChannelExist == false ->
-      case catch(genserver:request(St#client_st.server, {join, Channel, Nick, self()})) of
+      case catch(genserver:request(St#client_st.server, {join, Channel, self()})) of
         {'EXIT', Reason} ->
-          {{error, server_not_reached, Reason}, St};
+          {reply, {error, server_not_reached, Reason}, St};
         ok ->
           NewChannel = St#client_st.channels ++ [Channel],
     			NewState = St#client_st{channels=NewChannel},
     			{reply, ok, NewState}
       end;
     true ->
-      {{error, user_already_joined, "You are already in the channel"}, St}
+      {reply, {error, user_already_joined, "You are already in the channel"}, St}
     end;
 
-handle(St = #client_st{nick = Nick}, {leave, Channel}) ->
+%disconnect
+handle(St, {leave, Channel}) ->
   ChannelExist = lists:member(Channel, St#client_st.channels),
   if
-    ChannelExist == true ->
-      case catch(genserver:request(St#client_st.server, {leave, Channel, Nick, self()})) of
+    ChannelExist == false ->
+      {reply, {error, user_not_joined, "You haven't joined a channel"}, St};
+    true ->
+      case catch(genserver:request(St#client_st.server, {leave, Channel, self()})) of
         {'EXIT', Reason} ->
-          {{error, fake_news, Reason}, St};
+          {reply,{error, server_not_reached, Reason}, St};
         ok ->
           NewChannel = lists:delete(Channel, St#client_st.channels),
     			NewState = St#client_st{channels=NewChannel},
     			{reply, ok, NewState}
-      end;
-    true ->
-      {{error, user_already_joined, "You are already in the channel"}, St}
+        end
     end;
 
-
 % Sending message (from GUI, to channel)
-handle(St = #client_st{nick = Nick}, {message_send, Channel, Msg}) ->
+handle(St, {message_send, Channel, Msg}) ->
   ChannelExist = lists:member(Channel, St#client_st.channels),
   if
     ChannelExist == false ->
-      {{error, user_not_joined, "Sorry you are not connected to channel"}, St};
+      {reply,{error, user_not_joined, "Sorry you are not connected to channel"}, St};
     true ->
-      genserver:request(list_to_atom(Channel), {msg_from_client, self(), Nick, Msg}),
+      genserver:request(list_to_atom(Channel), {msg_from_client, self(), St#client_st.nick, Msg}),
       {reply, ok, St}
     end;
 

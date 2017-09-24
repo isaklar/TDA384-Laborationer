@@ -1,5 +1,5 @@
 -module(server).
--export([start/1, handle/2]).
+-export([start/1, handle/2, stop/1]).
 
 
 -record(server_st, {
@@ -13,28 +13,32 @@ initial_state() ->
   }.
 
 % Connect user to channel
-handle(St, {join, Channel, Nick, Pid}) ->
+handle(St, {join, Channel, Pid}) ->
   ChannelExist = lists:member(Channel, St#server_st.channels),
   if
     ChannelExist == false ->
-      NewChannel = St#server_st.channels ++ [Channel],
+      NewChannel = St#server_st.channels ++ [Channel | St#server_st.channels],
       NewState = St#server_st{channels=NewChannel},
-      genserver:start(list_to_atom(Channel), channel:initial_state(Channel, Nick, Pid), fun channel:handle/2),
+      genserver:start(list_to_atom(Channel), channel:initial_state(Channel), fun channel:handle/2),
+      genserver:request(list_to_atom(Channel), {join, Pid}),
       {reply, ok, NewState};
     true ->
-      genserver:request(list_to_atom(Channel), {connect, Nick, Pid}),
+      genserver:request(list_to_atom(Channel), {join, Pid}),
       {reply,ok, St}
     end;
 
 % disconnect user to channel
-handle(St, {leave, Channel, Nick, Pid}) ->
+handle(St, {leave, Channel, Pid}) ->
   ChannelExist = lists:member(Channel, St#server_st.channels),
   if
     ChannelExist == true ->
-      NewState  = St#server_st{channels = lists:delete(Channel, St#server_st.channels)},
-      genserver:start(list_to_atom(Channel), channel:initial_state(Channel, Nick, Pid), fun channel:handle/2),
-      {reply, ok, NewState}
+      genserver:request(list_to_atom(Channel), {leave, Pid}),
+      {reply, ok, St};
+    true ->
+      {reply, {error, user_not_joined, "Sorry you are not connected to channel"}, St}
     end.
+
+
 
 % Start a new server process with the given name
 % Do not change the signature of this function.
@@ -43,8 +47,8 @@ start(ServerAtom) ->
 
 % Stop the server process registered to the given name,
 % together with any other associated processes
-%stop(ServerAtom) ->
+stop(ServerAtom) ->
     % TODO Implement function
     % Return ok
     %not_implemented.
-    %genserver:stop(ServerAtom). % returns "ok."
+    genserver:stop(ServerAtom). % returns "ok."
