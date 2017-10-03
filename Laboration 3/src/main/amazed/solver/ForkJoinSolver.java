@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.*;
 
 /**
  * <code>ForkJoinSolver</code> implements a solver for
@@ -19,9 +20,10 @@ import java.util.concurrent.ConcurrentSkipListSet;
  */
 
 
-public class ForkJoinSolver
-    extends SequentialSolver
+public class ForkJoinSolver extends SequentialSolver
 {
+    ForkJoinSolver neighborTask;
+    ForkJoinSolver mainTask;
     /**
      * Creates a solver that searches in <code>maze</code> from the
      * start node to a goal.
@@ -67,8 +69,47 @@ public class ForkJoinSolver
         return parallelDepthFirstSearch();
     }
 
-    private List<Integer> parallelDepthFirstSearch()
-    {
+    private List<Integer> parallelDepthFirstSearch() {
+      int current = start;
+      List<Integer> mainTasks = new ArrayList<>();
+      List<Integer> neighborTasks = new ArrayList<>();
+      // returnerar null om vi är i en återvändsgränd
+      if(maze.neighbors(current).isEmpty()){
         return null;
+      // returnerar vägen till hjärtat om vi har hittat det.
+      }else if(maze.hasGoal(current)){
+        return pathFromTo(start, current);
+      // Inget ovan? Det betyder att det finns fler vägar att gå igenom.
+      }else{
+        int i = 0;
+        //loopar igenom alla grannar
+        for(int neighbor : maze.neighbors(current)){
+          // Om i är större än ett så skapar vi bara processer för grannarna...
+          if(i > 0){
+            start = neighbor;
+            neighborTask = new ForkJoinSolver(maze);
+            i++;
+          }else{
+            // ...men bara alla förutom en, för den första som inte är större än 0
+            // kommer vara "main"-processen
+            start = current;
+            mainTask = new ForkJoinSolver(maze);
+            i++;
+          }
+        }
+        /*
+         * TODO: Lägg till så att vi kan returnera resultaten från compute och join
+         * via en list<Integer>.
+         *
+         * Tanken är iaf att vi delar upp alla grann-processer och kör vidare på
+         * main-processen genom rekursion.
+         * Ger mainTask inte null så är det den vägen som leder till hjärtat.
+         * annars
+         * Kommer den andra tasken till slut leda till hjärtat.
+         */
+        neighborTask.fork();
+        mainTask.compute();
+        neighborTask.join();
+      }
     }
 }

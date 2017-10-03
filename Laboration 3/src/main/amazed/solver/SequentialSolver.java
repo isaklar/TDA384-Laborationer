@@ -35,8 +35,7 @@ import java.util.Collections;
  * @author  Carlo A. Furia
  */
 
-public class SequentialSolver
-    extends RecursiveTask<List<Integer>>
+public class SequentialSolver extends RecursiveTask<List<Integer>>
 {
     /**
      * Creates a solver that searches in <code>maze</code> from the
