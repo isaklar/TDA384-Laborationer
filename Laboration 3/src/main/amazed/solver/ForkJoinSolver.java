@@ -69,15 +69,62 @@ public class ForkJoinSolver extends SequentialSolver
         return parallelDepthFirstSearch();
     }
 
+   /**
+     * Metodversion 1
+     * Fungerar snarlikt till den Metodversion 2 förutom att den
+     * hanterar "visited" bättre
+     * @return resultatet i labyrint
+     */
+    private List<Integer> parallelDepthFirstSearch(){
+      int player = maze.newPlayer(start);
+      int current = start;
+      if(!maze.neighbors(current).isEmpty()){
+        return null;
+      }else if(maze.hasGoal(current)){
+        maze.move(player, current);
+        return pathFromTo(start, current);
+      }else{
+        if(!visited.contains(current)) {
+          maze.move(player, current);
+          visited.add(current);
+          int i;
+          for(int neighbor : maze.neighbors(current)) {
+            if(i > 0){
+              start = neighbor;
+              neighborTask = new ForkJoinSolver(maze);
+            }else{
+              start = current;
+              mainTask = new ForkJoinSolver(maze);
+              i++;
+            }
+          }
+          neighborTask.fork();
+          if(mainTask.compute() != null){
+            return mainTask.compute();
+          }else{
+            return neighborTask.join();
+          }
+        }
+      }
+    }
+
+    /**
+      * Metodversion 2
+      * Fungerar snarlikt till den Metodversion 1 förutom att den inte
+      * hanterar "visited" lika bra.
+      * @return resultatet i labyrint
+      */
     private List<Integer> parallelDepthFirstSearch() {
       int current = start;
-      List<Integer> mainTasks = new ArrayList<>();
-      List<Integer> neighborTasks = new ArrayList<>();
+      int player = maze.newPlayer(start);
       // returnerar null om vi är i en återvändsgränd
       if(maze.neighbors(current).isEmpty()){
         return null;
       // returnerar vägen till hjärtat om vi har hittat det.
       }else if(maze.hasGoal(current)){
+        // move player to goal
+        maze.move(player, current);
+        // search finished.
         return pathFromTo(start, current);
       // Inget ovan? Det betyder att det finns fler vägar att gå igenom.
       }else{
@@ -88,7 +135,6 @@ public class ForkJoinSolver extends SequentialSolver
           if(i > 0){
             start = neighbor;
             neighborTask = new ForkJoinSolver(maze);
-            i++;
           }else{
             // ...men bara alla förutom en, för den första som inte är större än 0
             // kommer vara "main"-processen
@@ -108,8 +154,12 @@ public class ForkJoinSolver extends SequentialSolver
          * Kommer den andra tasken till slut leda till hjärtat.
          */
         neighborTask.fork();
-        mainTask.compute();
-        neighborTask.join();
+
+        if(mainTask.compute() != null){
+          return mainTask.compute();
+        }else{
+          return neighborTask.join();
+        }
       }
     }
 }
