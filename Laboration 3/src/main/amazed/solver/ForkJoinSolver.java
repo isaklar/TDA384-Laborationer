@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.*;
@@ -22,8 +23,8 @@ import java.util.concurrent.*;
 
 public class ForkJoinSolver extends SequentialSolver
 {
-    ForkJoinSolver neighborTask;
-    ForkJoinSolver mainTask;
+    ForkJoinSolver childTask;
+    ConcurrentSkipListSet<Integer> visited;
     /**
      * Creates a solver that searches in <code>maze</code> from the
      * start node to a goal.
@@ -52,6 +53,13 @@ public class ForkJoinSolver extends SequentialSolver
         this.forkAfter = forkAfter;
     }
 
+    public ForkJoinSolver(Maze maze, int newStart, ConcurrentSkipListSet<Integer> visited)
+    {
+        this(maze);
+        start = newStart;
+        this.visited = visited;
+    }
+
     /**
      * Searches for and returns the path, as a list of node
      * identifiers, that goes from the start node to a goal node in
@@ -69,97 +77,35 @@ public class ForkJoinSolver extends SequentialSolver
         return parallelDepthFirstSearch();
     }
 
-   /**
-     * Metodversion 1
-     * Fungerar snarlikt till den Metodversion 2 förutom att den
-     * hanterar "visited" bättre
-     * @return resultatet i labyrint
-     */
     private List<Integer> parallelDepthFirstSearch(){
-      int player = maze.newPlayer(start);
       int current = start;
-      if(!maze.neighbors(current).isEmpty()){
-        return null;
-      }else if(maze.hasGoal(current)){
-        maze.move(player, current);
+      int player = maze.newPlayer(current);
+      while(true){
+      if(maze.hasGoal(current)){
         return pathFromTo(start, current);
-      }else{
-        if(!visited.contains(current)) {
-          maze.move(player, current);
-          visited.add(current);
-          int i;
-          for(int neighbor : maze.neighbors(current)) {
-            if(i > 0){
-              start = neighbor;
-              neighborTask = new ForkJoinSolver(maze);
-            }else{
-              start = current;
-              mainTask = new ForkJoinSolver(maze);
-              i++;
+      }else if(maze.neighbors(current).size() == 1 && visited.contains(current)){
+        visited.add(current);
+        return null;
+      }else if(maze.neighbors(current).size() == 2){
+        predecessor.put()
+        maze.move(player, current);
+        }else{
+        ArrayList<ForkJoinSolver> childs = new ArrayList<>();
+        for(int neighbor : maze.neighbors(current)){
+          if(!visited.contains(neighbor)){
+          childTask = new ForkJoinSolver(maze, neighbor, visited);
+          childs.add(childTask);
+          childTask.fork();
+          }
+          for(ForkJoinSolver f: childs){
+            LinkedList result = f.join();
+            if(result != null){
+              result.addFirst()
+            }
             }
           }
-          neighborTask.fork();
-          if(mainTask.compute() != null){
-            return mainTask.compute();
-          }else{
-            return neighborTask.join();
-          }
         }
       }
-    }
-
-    /**
-      * Metodversion 2
-      * Fungerar snarlikt till den Metodversion 1 förutom att den inte
-      * hanterar "visited" lika bra.
-      * @return resultatet i labyrint
-      */
-    private List<Integer> parallelDepthFirstSearch() {
-      int current = start;
-      int player = maze.newPlayer(start);
-      // returnerar null om vi är i en återvändsgränd
-      if(maze.neighbors(current).isEmpty()){
-        return null;
-      // returnerar vägen till hjärtat om vi har hittat det.
-      }else if(maze.hasGoal(current)){
-        // move player to goal
-        maze.move(player, current);
-        // search finished.
-        return pathFromTo(start, current);
-      // Inget ovan? Det betyder att det finns fler vägar att gå igenom.
-      }else{
-        int i = 0;
-        //loopar igenom alla grannar
-        for(int neighbor : maze.neighbors(current)){
-          // Om i är större än ett så skapar vi bara processer för grannarna...
-          if(i > 0){
-            start = neighbor;
-            neighborTask = new ForkJoinSolver(maze);
-          }else{
-            // ...men bara alla förutom en, för den första som inte är större än 0
-            // kommer vara "main"-processen
-            start = current;
-            mainTask = new ForkJoinSolver(maze);
-            i++;
-          }
-        }
-        /*
-         * TODO: Lägg till så att vi kan returnera resultaten från compute och join
-         * via en list<Integer>.
-         *
-         * Tanken är iaf att vi delar upp alla grann-processer och kör vidare på
-         * main-processen genom rekursion.
-         * Ger mainTask inte null så är det den vägen som leder till hjärtat.
-         * annars
-         * Kommer den andra tasken till slut leda till hjärtat.
-         */
-        neighborTask.fork();
-
-        if(mainTask.compute() != null){
-          return mainTask.compute();
-        }else{
-          return neighborTask.join();
-        }
-      }
+     }
     }
 }
