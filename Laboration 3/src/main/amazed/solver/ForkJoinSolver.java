@@ -26,6 +26,8 @@ public class ForkJoinSolver extends SequentialSolver
 {
     private ForkJoinSolver childTask;
     private ForkJoinSolver parentTask;
+    private ArrayList<ForkJoinSolver> childs;
+    private boolean foundIt;
     /**
      * Creates a solver that searches in <code>maze</code> from the
      * start node to a goal.
@@ -54,11 +56,13 @@ public class ForkJoinSolver extends SequentialSolver
         this.forkAfter = forkAfter;
     }
 
-    public ForkJoinSolver(Maze maze, int newStart, Set<Integer> visited)
+    public ForkJoinSolver(Maze maze, int newStart, Set<Integer> visited, Map<Integer, Integer> predecessor)
     {
         this(maze);
         start = newStart;
         this.visited = visited;
+        this.predecessor = predecessor;
+        foundIt = false;
     }
 
     /**
@@ -81,8 +85,9 @@ public class ForkJoinSolver extends SequentialSolver
     private List<Integer> parallelDepthFirstSearch() {
       int current = start;
       int player = maze.newPlayer(current);
-      while(true){
+      while(!foundIt){
         if(maze.hasGoal(current)){
+          foundIt = true;
           maze.move(player, current);
           return pathFromTo(start, current);
         }else if(maze.neighbors(current).size() == 1){
@@ -91,25 +96,26 @@ public class ForkJoinSolver extends SequentialSolver
           if(!visited.contains(current)){
             maze.move(player, current);
             visited.add(current);
-            ArrayList<ForkJoinSolver> childs = new ArrayList<>();
+            childs = new ArrayList<>();
             for(int nb : maze.neighbors(current)){
-              start = nb;
-              childTask = new ForkJoinSolver(maze);
-              childs.add(childTask);
-              childTask.fork();
+              //start = nb;
               if(!visited.contains(nb)){
                 predecessor.put(nb, current);
               }
+              childTask = new ForkJoinSolver(maze, nb, visited, predecessor);
+              childs.add(childTask);
+              childTask.fork();
             }
-            for(ForkJoinSolver f : childs){
-              List<Integer> result = f.join();
-              if(result != null){
-                List<Integer> retList = this.pathFromTo(start, current);
-                return retList;
-              }
+          }
+          for(ForkJoinSolver f : childs){
+            List<Integer> result = f.join();
+            if(result != null){
+              List<Integer> retList = this.pathFromTo(start, current);
+              return retList;
             }
           }
         }
       }
+      return null;
     }
 }
