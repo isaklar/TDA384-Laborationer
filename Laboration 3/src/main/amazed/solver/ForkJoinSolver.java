@@ -21,13 +21,17 @@ import java.util.concurrent.*;
  * <code>ForkJoinPool</code> object.
  */
 
-
 public class ForkJoinSolver extends SequentialSolver
 {
-    private ForkJoinSolver childTask;
     private ForkJoinSolver parentTask;
-    private ArrayList<ForkJoinSolver> childs;
-    private boolean foundIt;
+    private List<ForkJoinSolver> childTasks;    
+    // Might have to use something in the line of
+    // https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/atomic/AtomicReference.html
+    // instead of static variables. But as far sa we have understood it
+    // It should stil be OK to do it that way.
+    private static volatile boolean foundIt;
+    private static volatile Set<Integer> visited;
+
     /**
      * Creates a solver that searches in <code>maze</code> from the
      * start node to a goal.
@@ -54,15 +58,23 @@ public class ForkJoinSolver extends SequentialSolver
     {
         this(maze);
         this.forkAfter = forkAfter;
+        initVisited();
     }
 
-    public ForkJoinSolver(Maze maze, int newStart, Set<Integer> visited, Map<Integer, Integer> predecessor)
+    public ForkJoinSolver(Maze maze, int newStart, Map<Integer, Integer> predecessor)
     {
         this(maze);
         start = newStart;
         this.visited = visited;
         this.predecessor = predecessor;
-        foundIt = false;
+    }
+
+    private static synchronized void initVisited()
+    {
+        if(visited == null)
+        {
+            visited = new HashSet<>();
+        }
     }
 
     /**
@@ -82,40 +94,79 @@ public class ForkJoinSolver extends SequentialSolver
         return parallelDepthFirstSearch();
     }
 
-    private List<Integer> parallelDepthFirstSearch() {
-      int current = start;
-      int player = maze.newPlayer(current);
-      while(!foundIt){
-        if(maze.hasGoal(current)){
-          foundIt = true;
-          maze.move(player, current);
-          return pathFromTo(start, current);
-        }else if(maze.neighbors(current).size() == 1){
-          return null;
-        }else{
-          if(!visited.contains(current)){
-            maze.move(player, current);
-            visited.add(current);
-            childs = new ArrayList<>();
-            for(int nb : maze.neighbors(current)){
-              //start = nb;
-              if(!visited.contains(nb)){
-                predecessor.put(nb, current);
-              }
-              childTask = new ForkJoinSolver(maze, nb, visited, predecessor);
-              childs.add(childTask);
-              childTask.fork();
+    private List<Integer> parallelDepthFirstSearch()
+    {
+        int current = start;
+        int player = maze.newPlayer(current);
+        visited.add(current);
+        childTasks = new ArrayList<>();
+
+        while(!foundIt)
+        {
+            if(maze.hasGoal(current))
+            {
+                foundIt = true;
+                return pathFromTo(start, current);
             }
-          }
-          for(ForkJoinSolver f : childs){
-            List<Integer> result = f.join();
-            if(result != null){
-              List<Integer> retList = this.pathFromTo(start, current);
-              return retList;
+
+            int next = 0;
+            boolean nextSet = false;
+
+            for(int nb : maze.neighbors(current))
+            {
+                if(!checkIfVisitedAndMark(nb))
+                {
+                    predecessor.put(nb, current);
+                    if(!nextSet)
+                    {
+                        next = nb;
+                        nextSet = true;
+                    }
+                    else
+                    {
+                        ForkJoinSolver childTask =
+                            new ForkJoinSolver(maze, nb, predecessor);
+                        childTasks.add(childTask);
+                        childTask.fork();
+                    }
+                }
             }
-          }
+            if(!nextSet)
+            {
+                break;
+            }
+
+            maze.move(player, next);
+            current = next;
         }
-      }
-      return null;
+
+        for(ForkJoinSolver f : childTasks)
+        {
+            List<Integer> result = f.join();
+
+            if(result != null)
+            {
+                return this.pathFromTo(start, result.get(result.size() - 1));
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Synchronized check if the given curren int value is part of the visited set.
+     * Adds the int to the set. If the int is already part of the set it will not
+     * make a difference.
+     *
+     * @param current The current value
+     * @return If the current value is already part of the visited set
+     */
+    private static synchronized boolean checkIfVisitedAndMark(int current)
+    {
+        boolean ret = visited.contains(current);
+        // Doesn't matter if set already contains current
+        visited.add(current);
+
+        return ret;
     }
 }
