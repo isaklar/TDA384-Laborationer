@@ -24,13 +24,13 @@ import java.util.concurrent.*;
 public class ForkJoinSolver extends SequentialSolver
 {
     private ForkJoinSolver parentTask;
-    private List<ForkJoinSolver> childTasks;    
+    private List<ForkJoinSolver> childTasks;
     // Might have to use something in the line of
     // https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/atomic/AtomicReference.html
     // instead of static variables. But as far sa we have understood it
     // It should stil be OK to do it that way.
     private static volatile boolean foundIt;
-    private static volatile Set<Integer> visited;
+    //private ConcurrentSkipListSet<Integer> visited;
 
     /**
      * Creates a solver that searches in <code>maze</code> from the
@@ -58,23 +58,16 @@ public class ForkJoinSolver extends SequentialSolver
     {
         this(maze);
         this.forkAfter = forkAfter;
-        initVisited();
+        visited = new ConcurrentSkipListSet<>();
+        predecessor = new ConcurrentHashMap<>();
     }
 
-    public ForkJoinSolver(Maze maze, int newStart, Map<Integer, Integer> predecessor)
+    public ForkJoinSolver(ForkJoinSolver parent, int newStart)
     {
-        this(maze);
+        this(parent.maze);
         start = newStart;
-        this.visited = visited;
-        this.predecessor = predecessor;
-    }
-
-    private static synchronized void initVisited()
-    {
-        if(visited == null)
-        {
-            visited = new HashSet<>();
-        }
+        this.visited = parent.visited;
+        this.predecessor = parent.predecessor;
     }
 
     /**
@@ -96,6 +89,7 @@ public class ForkJoinSolver extends SequentialSolver
 
     private List<Integer> parallelDepthFirstSearch()
     {
+        boolean iFoundIt = false;
         int current = start;
         int player = maze.newPlayer(current);
         visited.add(current);
@@ -103,12 +97,6 @@ public class ForkJoinSolver extends SequentialSolver
 
         while(!foundIt)
         {
-            if(maze.hasGoal(current))
-            {
-                foundIt = true;
-                return pathFromTo(start, current);
-            }
-
             int next = 0;
             boolean nextSet = false;
 
@@ -124,8 +112,9 @@ public class ForkJoinSolver extends SequentialSolver
                     }
                     else
                     {
+                        System.out.println("forking\n");
                         ForkJoinSolver childTask =
-                            new ForkJoinSolver(maze, nb, predecessor);
+                            new ForkJoinSolver(this, nb);
                         childTasks.add(childTask);
                         childTask.fork();
                     }
@@ -135,11 +124,16 @@ public class ForkJoinSolver extends SequentialSolver
             {
                 break;
             }
-
             maze.move(player, next);
             current = next;
-        }
 
+            if(maze.hasGoal(current))
+            {
+                iFoundIt = true;
+                foundIt = true;
+                //return pathFromTo(start, current);
+            }
+        }
         for(ForkJoinSolver f : childTasks)
         {
             List<Integer> result = f.join();
@@ -150,7 +144,7 @@ public class ForkJoinSolver extends SequentialSolver
             }
         }
 
-        return null;
+        return iFoundIt ? pathFromTo(start, current) : null;
     }
 
     /**
@@ -161,12 +155,11 @@ public class ForkJoinSolver extends SequentialSolver
      * @param current The current value
      * @return If the current value is already part of the visited set
      */
-    private static synchronized boolean checkIfVisitedAndMark(int current)
+    private boolean checkIfVisitedAndMark(int current)
     {
         boolean ret = visited.contains(current);
         // Doesn't matter if set already contains current
         visited.add(current);
-
         return ret;
     }
 }

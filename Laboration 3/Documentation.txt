@@ -1,0 +1,6 @@
+####################### DOCUMENTATION FOR A-MAZED ##############################
+Fire: Group 12
+Authors: Isak Einler Larsson & Nils Gangby
+Course: Principles of Concurrent Programming
+################################################################################
+                      -- Our solution --
