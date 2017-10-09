@@ -3,14 +3,12 @@ package amazed.solver;
 import amazed.maze.Maze;
 
 import java.util.List;
-import java.util.LinkedList;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * <code>ForkJoinSolver</code> implements a solver for
@@ -21,16 +19,10 @@ import java.util.concurrent.*;
  * <code>ForkJoinPool</code> object.
  */
 
+
 public class ForkJoinSolver extends SequentialSolver
 {
-    private ForkJoinSolver parentTask;
-    private List<ForkJoinSolver> childTasks;
-    // Might have to use something in the line of
-    // https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/atomic/AtomicReference.html
-    // instead of static variables. But as far sa we have understood it
-    // It should stil be OK to do it that way.
-    private static volatile boolean foundIt;
-    //private ConcurrentSkipListSet<Integer> visited;
+  private static volatile boolean flag = false;
 
     /**
      * Creates a solver that searches in <code>maze</code> from the
@@ -54,21 +46,23 @@ public class ForkJoinSolver extends SequentialSolver
      *                    <code>forkAfter &lt;= 0</code> the solver never
      *                    forks new tasks
      */
-    public ForkJoinSolver(Maze maze, int forkAfter)
-    {
-        this(maze);
-        this.forkAfter = forkAfter;
-        visited = new ConcurrentSkipListSet<>();
-        predecessor = new ConcurrentHashMap<>();
-    }
 
-    public ForkJoinSolver(ForkJoinSolver parent, int newStart)
-    {
-        this(parent.maze);
-        start = newStart;
-        this.visited = parent.visited;
-        this.predecessor = parent.predecessor;
-    }
+
+      public ForkJoinSolver(Maze maze, int forkAfter)
+      {
+          this(maze);
+          this.forkAfter = forkAfter;
+          visited = new ConcurrentSkipListSet<>();
+          predecessor = new ConcurrentHashMap<>();
+        }
+
+        public ForkJoinSolver(ForkJoinSolver parent, int newStart)
+        {
+            this(parent.maze);
+            start = newStart;
+            this.visited = parent.visited;
+            this.predecessor = parent.predecessor;
+          }
 
     /**
      * Searches for and returns the path, as a list of node
@@ -89,77 +83,58 @@ public class ForkJoinSolver extends SequentialSolver
 
     private List<Integer> parallelDepthFirstSearch()
     {
-        boolean iFoundIt = false;
-        int current = start;
-        int player = maze.newPlayer(current);
-        visited.add(current);
-        childTasks = new ArrayList<>();
-
-        while(!foundIt)
-        {
-            int next = 0;
-            boolean nextSet = false;
-
-            for(int nb : maze.neighbors(current))
-            {
-                if(!checkIfVisitedAndMark(nb))
-                {
-                    predecessor.put(nb, current);
-                    if(!nextSet)
-                    {
-                        next = nb;
-                        nextSet = true;
-                    }
-                    else
-                    {
-                        System.out.println("forking\n");
-                        ForkJoinSolver childTask =
-                            new ForkJoinSolver(this, nb);
-                        childTasks.add(childTask);
-                        childTask.fork();
-                    }
-                }
-            }
-            if(!nextSet)
-            {
-                break;
-            }
-            maze.move(player, next);
-            current = next;
-
-            if(maze.hasGoal(current))
-            {
-                iFoundIt = true;
-                foundIt = true;
-                //return pathFromTo(start, current);
-            }
+      int current = start;//maze.getBoard.getCell(player.getHeight, player.getWidth).getId();
+      int player = maze.newPlayer(start);
+      while(!flag){ //While the goal has not been found we continue to search
+        if(maze.hasGoal(current)){
+          flag = true;
+          maze.move(player, current);
+          return pathFromTo(start, current);
         }
-        for(ForkJoinSolver f : childTasks)
-        {
+
+        else if(maze.neighbors(current).size() == 1){ //dead end
+          addVisited(current);
+          maze.move(player, current);                   //Add first time bös
+          return null;
+        }
+
+        else if(maze.neighbors(current).size() == 2 && current != maze.start()){ //straight road ahead
+          addVisited(current);
+          for(int i: maze.neighbors(current)){
+            if(!visited.contains(i)){                   //Add first time bös
+              maze.move(player, current);
+              predecessor.put(i, current);
+              current = i;
+            }
+          }
+        }
+        else{ //Reached a cross road, create new thread for each road
+          maze.move(player, current);
+          addVisited(current);
+          ArrayList<ForkJoinSolver> childs = new ArrayList<>();
+
+          for(int i: maze.neighbors(current)){
+            //maze.setAnimate(false);
+            if(!visited.contains(i)){
+              ForkJoinSolver child = new ForkJoinSolver(this, i);
+              childs.add(child);
+              child.fork();
+            }
+          }
+          for(ForkJoinSolver f: childs){
             List<Integer> result = f.join();
-
-            if(result != null)
-            {
-                return this.pathFromTo(start, result.get(result.size() - 1));
+            if(result != null){
+              List<Integer> returnList = pathFromTo(start, current);
+              returnList.addAll(result);
+              return returnList;
             }
+          }
         }
-
-        return iFoundIt ? pathFromTo(start, current) : null;
+      }
+      return null;
     }
-
-    /**
-     * Synchronized check if the given curren int value is part of the visited set.
-     * Adds the int to the set. If the int is already part of the set it will not
-     * make a difference.
-     *
-     * @param current The current value
-     * @return If the current value is already part of the visited set
-     */
-    private boolean checkIfVisitedAndMark(int current)
-    {
-        boolean ret = visited.contains(current);
-        // Doesn't matter if set already contains current
-        visited.add(current);
-        return ret;
+    private void addVisited(int id){
+      visited.add(id);
+      System.out.println(visited.size());
     }
 }
