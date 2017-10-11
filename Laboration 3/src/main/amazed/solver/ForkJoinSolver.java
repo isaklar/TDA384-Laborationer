@@ -11,6 +11,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.*;
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * <code>ForkJoinSolver</code> implements a solver for
@@ -29,7 +31,8 @@ public class ForkJoinSolver extends SequentialSolver
     // https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/atomic/AtomicReference.html
     // instead of static variables. But as far sa we have understood it
     // It should stil be OK to do it that way.
-    private static volatile boolean foundIt;
+    //private static volatile boolean foundIt;
+    private static AtomicBoolean atomicBoolean = new AtomicBoolean(false);
     //private ConcurrentSkipListSet<Integer> visited;
 
     /**
@@ -93,9 +96,9 @@ public class ForkJoinSolver extends SequentialSolver
         int current = start;
         int player = maze.newPlayer(current);
         visited.add(current);
-        childTasks = new ArrayList<>();
+        childTasks = Collections.synchronizedList(new ArrayList<>());
 
-        while(!foundIt)
+        while(atomicBoolean.get() == false)
         {
             int next = 0;
             boolean nextSet = false;
@@ -112,11 +115,10 @@ public class ForkJoinSolver extends SequentialSolver
                     }
                     else
                     {
-                        System.out.println("forking\n");
-                        ForkJoinSolver childTask =
-                            new ForkJoinSolver(this, nb);
-                        childTasks.add(childTask);
+                        ForkJoinSolver childTask = new ForkJoinSolver(this, nb);
                         childTask.fork();
+                        childTasks.add(childTask);
+                        System.out.println("FORKING: " + childTasks.size() + " task(s) active");
                     }
                 }
             }
@@ -130,14 +132,15 @@ public class ForkJoinSolver extends SequentialSolver
             if(maze.hasGoal(current))
             {
                 iFoundIt = true;
-                foundIt = true;
+                //foundIt = true;
+                atomicBoolean.set(true);
                 //return pathFromTo(start, current);
             }
         }
         for(ForkJoinSolver f : childTasks)
         {
             List<Integer> result = f.join();
-
+            System.out.println("JOINING! \n");
             if(result != null)
             {
                 return this.pathFromTo(start, result.get(result.size() - 1));
