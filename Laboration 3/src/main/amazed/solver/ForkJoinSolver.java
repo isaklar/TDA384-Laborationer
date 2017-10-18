@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * <code>ForkJoinSolver</code> implements a solver for
  * <code>Maze</code> objects using a fork/join multi-thread
- * depth-first search.
+ * depth-first search.pathFromTo
  * <p>
  * Instances of <code>ForkJoinSolver</code> should be run by a
  * <code>ForkJoinPool</code> object.
@@ -25,15 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ForkJoinSolver extends SequentialSolver
 {
-    private ForkJoinSolver parentTask;
+    private static AtomicBoolean foundIt = new AtomicBoolean(false);
     private List<ForkJoinSolver> childTasks;
-    // Might have to use something in the line of
-    // https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/atomic/AtomicReference.html
-    // instead of static variables. But as far sa we have understood it
-    // It should stil be OK to do it that way.
-    //private static volatile boolean foundIt;
-    private static AtomicBoolean atomicBoolean = new AtomicBoolean(false);
-    //private ConcurrentSkipListSet<Integer> visited;
 
     /**
      * Creates a solver that searches in <code>maze</code> from the
@@ -92,14 +85,21 @@ public class ForkJoinSolver extends SequentialSolver
 
     private List<Integer> parallelDepthFirstSearch()
     {
-        boolean iFoundIt = false;
         int current = start;
         int player = maze.newPlayer(current);
-        visited.add(current);
+        checkIfVisitedAndMark(current);
         childTasks = Collections.synchronizedList(new ArrayList<>());
+        List<Integer> toReturn = null;
 
-        while(atomicBoolean.get() == false)
+        while(foundIt.get() == false)
         {
+            if(maze.hasGoal(current))
+            {
+                foundIt.set(true);
+                toReturn = pathFromTo(start, current);
+                break;
+            }
+
             int next = 0;
             boolean nextSet = false;
 
@@ -116,42 +116,40 @@ public class ForkJoinSolver extends SequentialSolver
                     else
                     {
                         ForkJoinSolver childTask = new ForkJoinSolver(this, nb);
-                        childTask.fork();
                         childTasks.add(childTask);
-                        System.out.println("FORKING: " + childTasks.size() + " task(s) active");
+                        childTask.fork();
                     }
                 }
             }
-            if(!nextSet)
+
+            if(nextSet)
+            {
+                maze.move(player, next);
+                current = next;
+            }
+            else
             {
                 break;
             }
-            maze.move(player, next);
-            current = next;
-
-            if(maze.hasGoal(current))
-            {
-                iFoundIt = true;
-                //foundIt = true;
-                atomicBoolean.set(true);
-                //return pathFromTo(start, current);
-            }
         }
+
         for(ForkJoinSolver f : childTasks)
         {
             List<Integer> result = f.join();
-            System.out.println("JOINING! \n");
+
             if(result != null)
             {
-                return this.pathFromTo(start, result.get(result.size() - 1));
+                toReturn = pathFromTo(start, result.get(0));
+                toReturn.remove(toReturn.size() - 1);
+                toReturn.addAll(result);
             }
         }
 
-        return iFoundIt ? pathFromTo(start, current) : null;
+        return toReturn;
     }
 
     /**
-     * Synchronized check if the given curren int value is part of the visited set.
+     * Checks if the given current int value is part of the visited set.
      * Adds the int to the set. If the int is already part of the set it will not
      * make a difference.
      *
@@ -163,6 +161,7 @@ public class ForkJoinSolver extends SequentialSolver
         boolean ret = visited.contains(current);
         // Doesn't matter if set already contains current
         visited.add(current);
+
         return ret;
     }
 }
